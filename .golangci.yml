@@ -1,3 +1,5 @@
+version: "2"
+
 run:
   timeout: 5m
   tests: true
@@ -16,24 +18,28 @@ linters:
     - unconvert
     - unparam
     - whitespace
+  settings:
+    errcheck:
+      check-blank: true
+    govet:
+      enable:
+        - shadow
+    gocritic:
+      enabled-tags:
+        - diagnostic
+        - experimental
+        - opinionated
+        - performance
+        - style
+  exclusions:
+    presets: []
 
-linters-settings:
-  errcheck:
-    check-blank: true
-  govet:
-    enable:
-      - shadow
-  goimports:
-    local-prefixes: github.com/autonomous-bits/nomos-provider-environment-variables
-  gocritic:
-    enabled-tags:
-      - diagnostic
-      - experimental
-      - opinionated
-      - performance
-      - style
+formatters:
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/autonomous-bits/nomos-provider-environment-variables
 
 issues:
-  exclude-use-default: false
   max-issues-per-linter: 0
   max-same-issues: 0
