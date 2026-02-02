@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-02-02
+
+### Fixed
+- Update PORT announcement format and improve stdout flushing error handling
+
 ## [0.1.2] - 2026-02-02
 
 ### Changed
@@ -34,6 +39,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Added explicit stdout flush for PORT announcement to resolve CLI hang issue
 
-[Unreleased]: https://github.com/autonomous-bits/nomos-provider-environment-variables/compare/v0.1.2...HEAD
+[Unreleased]: https://github.com/autonomous-bits/nomos-provider-environment-variables/compare/v0.1.3...HEAD
+[0.1.3]: https://github.com/autonomous-bits/nomos-provider-environment-variables/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/autonomous-bits/nomos-provider-environment-variables/compare/v1.0.0...v0.1.2
 [1.0.0]: https://github.com/autonomous-bits/nomos-provider-environment-variables/releases/tag/v1.0.0
