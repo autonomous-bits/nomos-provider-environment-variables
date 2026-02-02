@@ -49,6 +49,7 @@ func main() {
 
 	// Print PORT announcement to stdout (required by CLI)
 	fmt.Printf("PORT=%d\n", port)
+	os.Stdout.Sync() // Ensure PORT is flushed immediately
 
 	// Log startup to stderr
 	log.Info("environment-variables provider starting")
