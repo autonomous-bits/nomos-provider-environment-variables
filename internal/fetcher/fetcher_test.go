@@ -144,10 +144,10 @@ func TestFetcherCaching(t *testing.T) {
 		t.Fatalf("setup failed: %v", err)
 	}
 	defer func() {
-					if err := os.Unsetenv(testVar); err != nil {
-						t.Logf("cleanup failed: %v", err)
-					}
-				}()
+		if err := os.Unsetenv(testVar); err != nil {
+			t.Logf("cleanup failed: %v", err)
+		}
+	}()
 
 	fetcher := New()
 

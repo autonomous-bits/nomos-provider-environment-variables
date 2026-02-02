@@ -31,10 +31,10 @@ func TestSingleRequiredVariableExists(t *testing.T) {
 		t.Fatalf("setup failed: %v", err)
 	}
 	defer func() {
-				if err := os.Unsetenv(varName); err != nil {
-					t.Logf("cleanup failed: %v", err)
-				}
-			}()
+		if err := os.Unsetenv(varName); err != nil {
+			t.Logf("cleanup failed: %v", err)
+		}
+	}()
 
 	tests := []struct {
 		name              string

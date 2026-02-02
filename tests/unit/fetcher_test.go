@@ -54,10 +54,10 @@ func TestEnvLookup(t *testing.T) {
 					t.Fatalf("failed to set env var: %v", err)
 				}
 				defer func() {
-				if err := os.Unsetenv(tt.varName); err != nil {
-					t.Logf("cleanup failed: %v", err)
-				}
-			}()
+					if err := os.Unsetenv(tt.varName); err != nil {
+						t.Logf("cleanup failed: %v", err)
+					}
+				}()
 			}
 
 			value, exists := os.LookupEnv(tt.varName)
@@ -141,10 +141,10 @@ func TestFetcherCaching(t *testing.T) {
 		t.Fatalf("failed to set env var: %v", err)
 	}
 	defer func() {
-				if err := os.Unsetenv(testVar); err != nil {
-					t.Logf("cleanup failed: %v", err)
-				}
-			}()
+		if err := os.Unsetenv(testVar); err != nil {
+			t.Logf("cleanup failed: %v", err)
+		}
+	}()
 
 	f := fetcher.New()
 
@@ -413,7 +413,7 @@ func TestUnicodeUTF8Variables(t *testing.T) {
 			}
 
 			// Verify UTF-8 validity
-				if value != "" {
+			if value != "" {
 				// Check if value is valid UTF-8
 				validUTF8 := true
 				for _, r := range value {
