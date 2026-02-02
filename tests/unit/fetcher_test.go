@@ -46,12 +46,18 @@ func TestEnvLookup(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Clean slate
-			_ = os.Unsetenv(tt.varName)
+			if err := os.Unsetenv(tt.varName); err != nil {
+				t.Logf("cleanup failed: %v", err)
+			}
 			if tt.setupEnv {
 				if err := os.Setenv(tt.varName, tt.varValue); err != nil {
 					t.Fatalf("failed to set env var: %v", err)
 				}
-				defer func() { _ = os.Unsetenv(tt.varName) }()
+				defer func() {
+				if err := os.Unsetenv(tt.varName); err != nil {
+					t.Logf("cleanup failed: %v", err)
+				}
+			}()
 			}
 
 			value, exists := os.LookupEnv(tt.varName)
@@ -76,10 +82,14 @@ func TestFetcherBasic(t *testing.T) {
 		if err := os.Setenv(k, v); err != nil {
 			t.Fatalf("failed to set env var %s: %v", k, err)
 		}
-		defer func(key string) { _ = os.Unsetenv(key) }(k)
+		t.Cleanup(func() {
+			if err := os.Unsetenv(k); err != nil {
+				t.Logf("cleanup failed: %v", err)
+			}
+		})
 	}
 
-	fetcher := fetcher.New()
+	f := fetcher.New()
 
 	tests := []struct {
 		name      string
@@ -108,7 +118,7 @@ func TestFetcherBasic(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			value, err := fetcher.Fetch(tt.varName)
+			value, err := f.Fetch(tt.varName)
 			if tt.wantError {
 				if err == nil {
 					t.Error("expected error, got nil")
@@ -130,12 +140,16 @@ func TestFetcherCaching(t *testing.T) {
 	if err := os.Setenv(testVar, "initial_value"); err != nil {
 		t.Fatalf("failed to set env var: %v", err)
 	}
-	defer func() { _ = os.Unsetenv(testVar) }()
+	defer func() {
+				if err := os.Unsetenv(testVar); err != nil {
+					t.Logf("cleanup failed: %v", err)
+				}
+			}()
 
-	fetcher := fetcher.New()
+	f := fetcher.New()
 
 	// First fetch
-	val1, err := fetcher.Fetch(testVar)
+	val1, err := f.Fetch(testVar)
 	if err != nil {
 		t.Fatalf("first fetch failed: %v", err)
 	}
@@ -144,12 +158,12 @@ func TestFetcherCaching(t *testing.T) {
 	}
 
 	// Change environment variable
-	if err := os.Setenv(testVar, "changed_value"); err != nil {
+	if err = os.Setenv(testVar, "changed_value"); err != nil {
 		t.Fatalf("failed to change env var: %v", err)
 	}
 
 	// Second fetch should return cached value
-	val2, err := fetcher.Fetch(testVar)
+	val2, err := f.Fetch(testVar)
 	if err != nil {
 		t.Fatalf("second fetch failed: %v", err)
 	}
@@ -218,8 +232,14 @@ func TestSpecialCharactersInVariableNames(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Clean up before and after
-			_ = os.Unsetenv(tt.varName)
-			defer func() { _ = os.Unsetenv(tt.varName) }()
+			if err := os.Unsetenv(tt.varName); err != nil {
+				t.Logf("cleanup failed: %v", err)
+			}
+			defer func() {
+				if err := os.Unsetenv(tt.varName); err != nil {
+					t.Logf("cleanup failed: %v", err)
+				}
+			}()
 
 			// Set the environment variable
 			if err := os.Setenv(tt.varName, tt.varValue); err != nil {
@@ -231,8 +251,8 @@ func TestSpecialCharactersInVariableNames(t *testing.T) {
 			}
 
 			// Create fetcher and fetch the value
-			fetcher := fetcher.New()
-			value, err := fetcher.Fetch(tt.varName)
+			f := fetcher.New()
+			value, err := f.Fetch(tt.varName)
 
 			if tt.wantSuccess {
 				if err != nil {
@@ -357,8 +377,14 @@ func TestUnicodeUTF8Variables(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Clean up
-			_ = os.Unsetenv(tt.varName)
-			defer func() { _ = os.Unsetenv(tt.varName) }()
+			if err := os.Unsetenv(tt.varName); err != nil {
+				t.Logf("cleanup failed: %v", err)
+			}
+			defer func() {
+				if err := os.Unsetenv(tt.varName); err != nil {
+					t.Logf("cleanup failed: %v", err)
+				}
+			}()
 
 			// Set the environment variable
 			if err := os.Setenv(tt.varName, tt.varValue); err != nil {
@@ -372,8 +398,8 @@ func TestUnicodeUTF8Variables(t *testing.T) {
 			}
 
 			// Create fetcher and fetch the value
-			fetcher := fetcher.New()
-			value, err := fetcher.Fetch(tt.varName)
+			f := fetcher.New()
+			value, err := f.Fetch(tt.varName)
 
 			if err != nil {
 				t.Fatalf("fetch failed: %v", err)
@@ -387,7 +413,7 @@ func TestUnicodeUTF8Variables(t *testing.T) {
 			}
 
 			// Verify UTF-8 validity
-			if len(value) > 0 {
+				if value != "" {
 				// Check if value is valid UTF-8
 				validUTF8 := true
 				for _, r := range value {
@@ -422,11 +448,19 @@ func TestPlatformNativeCaseSensitivity(t *testing.T) {
 	testValueLower := "lowercase_value"
 
 	// Clean up
-	_ = os.Unsetenv(testKey)
-	_ = os.Unsetenv(testKeyLower)
+	if err := os.Unsetenv(testKey); err != nil {
+		t.Logf("cleanup failed: %v", err)
+	}
+	if err := os.Unsetenv(testKeyLower); err != nil {
+		t.Logf("cleanup failed: %v", err)
+	}
 	defer func() {
-		_ = os.Unsetenv(testKey)
-		_ = os.Unsetenv(testKeyLower)
+		if err := os.Unsetenv(testKey); err != nil {
+			t.Logf("cleanup failed: %v", err)
+		}
+		if err := os.Unsetenv(testKeyLower); err != nil {
+			t.Logf("cleanup failed: %v", err)
+		}
 	}()
 
 	// Set both uppercase and lowercase variables
@@ -439,13 +473,13 @@ func TestPlatformNativeCaseSensitivity(t *testing.T) {
 		t.Logf("setting lowercase variable: %v", err)
 	}
 
-	fetcher := fetcher.New()
+	f := fetcher.New()
 
 	// Fetch uppercase version
-	valueUpper, errUpper := fetcher.Fetch(testKey)
+	valueUpper, errUpper := f.Fetch(testKey)
 
 	// Fetch lowercase version
-	valueLower, errLower := fetcher.Fetch(testKeyLower)
+	valueLower, errLower := f.Fetch(testKeyLower)
 
 	// Platform-specific assertions
 	if errUpper != nil {

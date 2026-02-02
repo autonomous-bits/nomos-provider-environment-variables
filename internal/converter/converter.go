@@ -21,7 +21,7 @@ const (
 // Conversion precedence: JSON (if starts with { or [) → Number → Boolean → String.
 // enableTypeConversion controls number/boolean conversion, enableJSONParsing controls JSON parsing.
 // Returns the converted value as interface{}, type string, and error if conversion fails.
-func ConvertValue(value string, enableTypeConversion, enableJSONParsing bool) (interface{}, string, error) {
+func ConvertValue(value string, enableTypeConversion, enableJSONParsing bool) (result interface{}, typeStr string, err error) {
 	// Check size limit
 	if len(value) > MaxValueSize {
 		return nil, "", ErrValueTooLarge
@@ -81,7 +81,7 @@ func TryNumeric(value string) (float64, bool) {
 // TryBoolean attempts to parse a boolean value.
 // Supports: true, false, yes, no (case-insensitive).
 // Returns the boolean value and true if successful, false and false otherwise.
-func TryBoolean(value string) (bool, bool) {
+func TryBoolean(value string) (result, ok bool) {
 	lower := strings.ToLower(strings.TrimSpace(value))
 
 	switch lower {

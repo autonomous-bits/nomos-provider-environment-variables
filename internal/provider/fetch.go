@@ -80,7 +80,8 @@ func (p *Provider) Fetch(_ context.Context, req *pb.FetchRequest) (*pb.FetchResp
 	// Apply type conversion if enabled
 	var convertedValue interface{} = value
 	if p.config.EnableTypeConversion || p.config.EnableJSONParsing {
-		converted, err := p.convertValue(value)
+		var converted interface{}
+		converted, err = p.convertValue(value)
 		if err != nil {
 			p.logger.Error("type conversion failed for %s: %v", varName, err)
 			return nil, status.Errorf(codes.InvalidArgument, "type conversion failed: %v", err)

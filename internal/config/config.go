@@ -66,7 +66,7 @@ func ValidateConfig(c *Config) error {
 }
 
 // getString extracts a string value from a protobuf Struct
-func getString(m *structpb.Struct, key string, defaultVal string) string {
+func getString(m *structpb.Struct, key, defaultVal string) string {
 	if m == nil || m.Fields == nil {
 		return defaultVal
 	}

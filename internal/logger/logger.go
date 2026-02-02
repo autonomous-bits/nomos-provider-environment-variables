@@ -67,7 +67,10 @@ func (l *Logger) log(level Level, format string, args ...interface{}) {
 
 	timestamp := time.Now().Format(time.RFC3339)
 	message := fmt.Sprintf(format, args...)
-	_, _ = fmt.Fprintf(l.output, "[%s] %s: %s\n", timestamp, level.String(), message)
+	if _, err := fmt.Fprintf(l.output, "[%s] %s: %s\n", timestamp, level.String(), message); err != nil {
+		// If logging fails, there's not much we can do except write to stderr
+		fmt.Fprintf(os.Stderr, "logger error: %v\n", err)
+	}
 }
 
 // Error logs an error-level message

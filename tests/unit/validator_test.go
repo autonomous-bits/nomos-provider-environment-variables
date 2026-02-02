@@ -27,8 +27,14 @@ func TestSingleRequiredVariableExists(t *testing.T) {
 	varValue := "test_value"
 
 	// Set the environment variable
-	_ = os.Setenv(varName, varValue)
-	defer func() { _ = os.Unsetenv(varName) }()
+	if err := os.Setenv(varName, varValue); err != nil {
+		t.Fatalf("setup failed: %v", err)
+	}
+	defer func() {
+				if err := os.Unsetenv(varName); err != nil {
+					t.Logf("cleanup failed: %v", err)
+				}
+			}()
 
 	tests := []struct {
 		name              string
@@ -171,13 +177,25 @@ func TestMultipleRequiredVariablesValidation(t *testing.T) {
 	missingVar1 := fmt.Sprintf("TEST_MISSING_VAR1_%d", timestamp)
 	missingVar2 := fmt.Sprintf("TEST_MISSING_VAR2_%d", timestamp)
 
-	_ = os.Setenv(existingVar1, "value1")
-	_ = os.Setenv(existingVar2, "value2")
-	_ = os.Setenv(existingVar3, "value3")
+	if err := os.Setenv(existingVar1, "value1"); err != nil {
+		t.Fatalf("setup failed: %v", err)
+	}
+	if err := os.Setenv(existingVar2, "value2"); err != nil {
+		t.Fatalf("setup failed: %v", err)
+	}
+	if err := os.Setenv(existingVar3, "value3"); err != nil {
+		t.Fatalf("setup failed: %v", err)
+	}
 	defer func() {
-		_ = os.Unsetenv(existingVar1)
-		_ = os.Unsetenv(existingVar2)
-		_ = os.Unsetenv(existingVar3)
+		if err := os.Unsetenv(existingVar1); err != nil {
+			t.Logf("cleanup failed: %v", err)
+		}
+		if err := os.Unsetenv(existingVar2); err != nil {
+			t.Logf("cleanup failed: %v", err)
+		}
+		if err := os.Unsetenv(existingVar3); err != nil {
+			t.Logf("cleanup failed: %v", err)
+		}
 	}()
 
 	tests := []struct {
@@ -281,13 +299,25 @@ func TestRequiredVariablesWithPrefix(t *testing.T) {
 	prefixedVar2 := fmt.Sprintf("%sAPI_KEY_%d", prefix, timestamp)
 	unprefixedVar := fmt.Sprintf("SYSTEM_VAR_%d", timestamp)
 
-	_ = os.Setenv(prefixedVar1, "localhost")
-	_ = os.Setenv(prefixedVar2, "secret123")
-	_ = os.Setenv(unprefixedVar, "systemvalue")
+	if err := os.Setenv(prefixedVar1, "localhost"); err != nil {
+		t.Fatalf("setup failed: %v", err)
+	}
+	if err := os.Setenv(prefixedVar2, "secret123"); err != nil {
+		t.Fatalf("setup failed: %v", err)
+	}
+	if err := os.Setenv(unprefixedVar, "systemvalue"); err != nil {
+		t.Fatalf("setup failed: %v", err)
+	}
 	defer func() {
-		_ = os.Unsetenv(prefixedVar1)
-		_ = os.Unsetenv(prefixedVar2)
-		_ = os.Unsetenv(unprefixedVar)
+		if err := os.Unsetenv(prefixedVar1); err != nil {
+			t.Logf("cleanup failed: %v", err)
+		}
+		if err := os.Unsetenv(prefixedVar2); err != nil {
+			t.Logf("cleanup failed: %v", err)
+		}
+		if err := os.Unsetenv(unprefixedVar); err != nil {
+			t.Logf("cleanup failed: %v", err)
+		}
 	}()
 
 	tests := []struct {
@@ -390,9 +420,9 @@ func TestRequiredVariablesWithPrefix(t *testing.T) {
 }
 
 // Helper function to convert []string to []interface{} for protobuf
-func convertToInterfaceSlice(strings []string) []interface{} {
-	result := make([]interface{}, len(strings))
-	for i, s := range strings {
+func convertToInterfaceSlice(strs []string) []interface{} {
+	result := make([]interface{}, len(strs))
+	for i, s := range strs {
 		result[i] = s
 	}
 	return result

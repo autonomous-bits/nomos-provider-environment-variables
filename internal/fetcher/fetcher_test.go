@@ -44,11 +44,19 @@ func TestEnvLookup(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Clean slate
-			_ = os.Unsetenv(tt.varName)
+			if err := os.Unsetenv(tt.varName); err != nil {
+				t.Logf("cleanup failed: %v", err)
+			}
 
 			if tt.setupEnv {
-				_ = os.Setenv(tt.varName, tt.varValue)
-				defer func() { _ = os.Unsetenv(tt.varName) }()
+				if err := os.Setenv(tt.varName, tt.varValue); err != nil {
+					t.Fatalf("setup failed: %v", err)
+				}
+				defer func() {
+					if err := os.Unsetenv(tt.varName); err != nil {
+						t.Logf("cleanup failed: %v", err)
+					}
+				}()
 			}
 
 			value, exists := os.LookupEnv(tt.varName)
@@ -73,8 +81,14 @@ func TestFetcherBasic(t *testing.T) {
 	}
 
 	for k, v := range testVars {
-		_ = os.Setenv(k, v)
-		defer func(key string) { _ = os.Unsetenv(key) }(k)
+		if err := os.Setenv(k, v); err != nil {
+			t.Fatalf("setup failed: %v", err)
+		}
+		t.Cleanup(func() {
+			if err := os.Unsetenv(k); err != nil {
+				t.Logf("cleanup failed: %v", err)
+			}
+		})
 	}
 
 	fetcher := New()
@@ -126,8 +140,14 @@ func TestFetcherBasic(t *testing.T) {
 
 func TestFetcherCaching(t *testing.T) {
 	testVar := fmt.Sprintf("FETCH_CACHE_TEST_%d", os.Getpid())
-	_ = os.Setenv(testVar, "initial_value")
-	defer func() { _ = os.Unsetenv(testVar) }()
+	if err := os.Setenv(testVar, "initial_value"); err != nil {
+		t.Fatalf("setup failed: %v", err)
+	}
+	defer func() {
+					if err := os.Unsetenv(testVar); err != nil {
+						t.Logf("cleanup failed: %v", err)
+					}
+				}()
 
 	fetcher := New()
 
@@ -142,7 +162,9 @@ func TestFetcherCaching(t *testing.T) {
 	}
 
 	// Change environment variable
-	_ = os.Setenv(testVar, "changed_value")
+	if err = os.Setenv(testVar, "changed_value"); err != nil {
+		t.Fatalf("setup failed: %v", err)
+	}
 
 	// Second fetch should return cached value
 	val2, err := fetcher.Fetch(testVar)

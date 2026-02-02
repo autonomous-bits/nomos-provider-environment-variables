@@ -82,7 +82,9 @@ func main() {
 	// Call provider shutdown
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	_, _ = prov.Shutdown(ctx, &pb.ShutdownRequest{})
+	if _, err := prov.Shutdown(ctx, &pb.ShutdownRequest{}); err != nil {
+		log.Error("error during shutdown: %v", err)
+	}
 
 	// Stop gRPC server
 	grpcServer.GracefulStop()

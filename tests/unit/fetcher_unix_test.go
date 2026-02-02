@@ -24,11 +24,19 @@ func TestUnixCaseSensitivity(t *testing.T) {
 	testValueLower := "lowercase_value"
 
 	// Clean up
-	_ = os.Unsetenv(testKey)
-	_ = os.Unsetenv(testKeyLower)
+	if err := os.Unsetenv(testKey); err != nil {
+		t.Logf("cleanup failed: %v", err)
+	}
+	if err := os.Unsetenv(testKeyLower); err != nil {
+		t.Logf("cleanup failed: %v", err)
+	}
 	defer func() {
-		_ = os.Unsetenv(testKey)
-		_ = os.Unsetenv(testKeyLower)
+		if err := os.Unsetenv(testKey); err != nil {
+			t.Logf("cleanup failed: %v", err)
+		}
+		if err := os.Unsetenv(testKeyLower); err != nil {
+			t.Logf("cleanup failed: %v", err)
+		}
 	}()
 
 	// Set both variables with different values
