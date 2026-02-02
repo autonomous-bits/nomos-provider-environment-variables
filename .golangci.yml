@@ -1,5 +1,3 @@
-version: 2
-
 run:
   timeout: 5m
   tests: true
@@ -23,7 +21,8 @@ linters-settings:
   errcheck:
     check-blank: true
   govet:
-    check-shadowing: true
+    enable:
+      - shadow
   goimports:
     local-prefixes: github.com/autonomous-bits/nomos-provider-environment-variables
   gocritic:
