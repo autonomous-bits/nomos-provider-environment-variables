@@ -1,6 +1,6 @@
 module github.com/autonomous-bits/nomos-provider-environment-variables
 
-go 1.25.5
+go 1.25.6
 
 require (
 	google.golang.org/grpc v1.78.0
