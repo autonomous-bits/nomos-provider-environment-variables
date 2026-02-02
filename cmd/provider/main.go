@@ -48,8 +48,10 @@ func main() {
 	port := listener.Addr().(*net.TCPAddr).Port
 
 	// Print PORT announcement to stdout (required by CLI)
-	fmt.Printf("PORT=%d\n", port)
-	_ = os.Stdout.Sync() // CRITICAL: Flush stdout immediately
+	fmt.Printf("PROVIDER_PORT=%d\n", port)
+	if err := os.Stdout.Sync(); err != nil {
+		log.Error("failed to flush stdout: %v", err)
+	}
 
 	// Log startup to stderr
 	log.Info("environment-variables provider starting")
