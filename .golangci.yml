@@ -1,0 +1,45 @@
+version: "2"
+
+run:
+  timeout: 5m
+  tests: true
+  modules-download-mode: readonly
+
+linters:
+  enable:
+    - errcheck
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - misspell
+    - gocritic
+    - revive
+    - unconvert
+    - unparam
+    - whitespace
+  settings:
+    errcheck:
+      check-blank: true
+    govet:
+      enable:
+        - shadow
+    gocritic:
+      enabled-tags:
+        - diagnostic
+        - experimental
+        - opinionated
+        - performance
+        - style
+  exclusions:
+    presets: []
+
+formatters:
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/autonomous-bits/nomos-provider-environment-variables
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
