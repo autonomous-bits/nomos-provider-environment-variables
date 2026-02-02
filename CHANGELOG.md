@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-02-02
+
 ### Added
 - Initial implementation of environment variables provider
 - Support for direct environment variable access
@@ -23,11 +25,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Comprehensive README with usage examples for all 5 user stories
 - Performance benchmarks documentation
 - Build instructions and troubleshooting guide
+- Release pipeline with GoReleaser for multi-platform binaries
+- MIT License
 
-## [1.0.0] - TBD
-
-### Added
-- Initial release
-
-[Unreleased]: https://github.com/autonomous-bits/nomos-provider-environment-variables/compare/v1.0.0...HEAD
-[1.0.0]: https://github.com/autonomous-bits/nomos-provider-environment-variables/releases/tag/v1.0.0
+[Unreleased]: https://github.com/autonomous-bits/nomos-provider-environment-variables/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/autonomous-bits/nomos-provider-environment-variables/releases/tag/v0.1.0
