@@ -1,0 +1,89 @@
+version: 2
+
+before:
+  hooks:
+    - go mod tidy
+    - go mod download
+
+builds:
+  - id: provider
+    main: ./cmd/provider
+    binary: nomos-provider-environment-variables
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X main.version={{ .Version }}
+
+archives:
+  - id: default
+    name_template: 'nomos-provider-environment-variables-{{ .Version }}-{{ .Os }}-{{ .Arch }}'
+    files:
+      - LICENSE
+      - README.md
+      - CHANGELOG.md
+
+checksum:
+  name_template: 'SHA256SUMS'
+  algorithm: sha256
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^chore:'
+      - 'typo'
+
+release:
+  github:
+    owner: autonomous-bits
+    name: nomos-provider-environment-variables
+  prerelease: auto
+  name_template: "{{ .Tag }}"
+  header: |
+    ## Nomos Environment Variables Provider {{ .Tag }}
+    
+    Release of the Nomos Environment Variables Provider.
+    
+    ### Installation
+    
+    **macOS/Linux:**
+    ```bash
+    # Download archive
+    curl -LO https://github.com/autonomous-bits/nomos-provider-environment-variables/releases/download/v{{ .Version }}/nomos-provider-environment-variables-{{ .Version }}-<os>-<arch>.tar.gz
+    
+    # Verify checksum
+    curl -LO https://github.com/autonomous-bits/nomos-provider-environment-variables/releases/download/v{{ .Version }}/SHA256SUMS
+    shasum -a 256 -c SHA256SUMS
+    
+    # Extract
+    tar -xzf nomos-provider-environment-variables-{{ .Version }}-<os>-<arch>.tar.gz
+    
+    # Install
+    chmod +x nomos-provider-environment-variables
+    sudo mv nomos-provider-environment-variables /usr/local/bin/
+    ```
+    
+    **Windows:**
+    ```powershell
+    # Download archive
+    curl -LO https://github.com/autonomous-bits/nomos-provider-environment-variables/releases/download/v{{ .Version }}/nomos-provider-environment-variables-{{ .Version }}-windows-<arch>.tar.gz
+    
+    # Extract (requires tar, available in Windows 10+ or Git Bash)
+    tar -xzf nomos-provider-environment-variables-{{ .Version }}-windows-<arch>.tar.gz
+    
+    # Move to PATH directory as needed
+    ```
+    
+    ### Changes
+  footer: |
+    **Full Changelog**: https://github.com/autonomous-bits/nomos-provider-environment-variables/compare/{{ .PreviousTag }}...{{ .Tag }}
