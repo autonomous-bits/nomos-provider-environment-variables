@@ -13,7 +13,7 @@ import (
 
 	"google.golang.org/protobuf/types/known/structpb"
 
-	pb "github.com/autonomous-bits/nomos-provider-environment-variables/proto/providerv1"
+	pb "github.com/autonomous-bits/nomos/libs/provider-proto/gen/go/nomos/provider/v1"
 )
 
 // T089: Benchmark test for SC-002 (fetch response <10ms)

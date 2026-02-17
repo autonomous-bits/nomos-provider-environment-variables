@@ -3,7 +3,7 @@ package provider
 import (
 	"context"
 
-	pb "github.com/autonomous-bits/nomos-provider-environment-variables/proto/providerv1"
+	pb "github.com/autonomous-bits/nomos/libs/provider-proto/gen/go/nomos/provider/v1"
 )
 
 // Info returns provider metadata

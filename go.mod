@@ -1,8 +1,9 @@
 module github.com/autonomous-bits/nomos-provider-environment-variables
 
-go 1.25.6
+go 1.26.0
 
 require (
+	github.com/autonomous-bits/nomos/libs/provider-proto v0.2.2
 	google.golang.org/grpc v1.78.0
 	google.golang.org/protobuf v1.36.11
 )

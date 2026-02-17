@@ -1,3 +1,5 @@
+github.com/autonomous-bits/nomos/libs/provider-proto v0.2.2 h1:gOxMbvfImcMwnoTKuXWWM1V+DiEnFv6gpONDCDITWzA=
+github.com/autonomous-bits/nomos/libs/provider-proto v0.2.2/go.mod h1:H1H7K1m0XMi/B1OvWWCj7/9gblv3FPYehyTKkXNtuYI=
 github.com/go-logr/logr v1.4.3 h1:CjnDlHq8ikf6E492q6eKboGOC0T8CDaOvkHCIg8idEI=
 github.com/go-logr/logr v1.4.3/go.mod h1:9T104GzyrTigFIr8wt5mBrctHMim0Nb2HLGrmQ40KvY=
 github.com/go-logr/stdr v1.2.2 h1:hSWxHoqTgW2S2qGc0LTAI563KZ5YKYRhT3MFKZMbjag=
