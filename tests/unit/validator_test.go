@@ -14,7 +14,7 @@ import (
 
 	"github.com/autonomous-bits/nomos-provider-environment-variables/internal/logger"
 	"github.com/autonomous-bits/nomos-provider-environment-variables/internal/provider"
-	pb "github.com/autonomous-bits/nomos-provider-environment-variables/proto/providerv1"
+	pb "github.com/autonomous-bits/nomos/libs/provider-proto/gen/go/nomos/provider/v1"
 )
 
 // T072: Unit test for single required variable validation (exists)

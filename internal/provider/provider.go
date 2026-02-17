@@ -8,7 +8,7 @@ import (
 	"github.com/autonomous-bits/nomos-provider-environment-variables/internal/fetcher"
 	"github.com/autonomous-bits/nomos-provider-environment-variables/internal/logger"
 	"github.com/autonomous-bits/nomos-provider-environment-variables/internal/resolver"
-	pb "github.com/autonomous-bits/nomos-provider-environment-variables/proto/providerv1"
+	pb "github.com/autonomous-bits/nomos/libs/provider-proto/gen/go/nomos/provider/v1"
 )
 
 // State represents the lifecycle state of the provider

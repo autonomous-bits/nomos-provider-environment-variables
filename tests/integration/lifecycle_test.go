@@ -10,7 +10,7 @@ import (
 
 	"google.golang.org/protobuf/types/known/structpb"
 
-	pb "github.com/autonomous-bits/nomos-provider-environment-variables/proto/providerv1"
+	pb "github.com/autonomous-bits/nomos/libs/provider-proto/gen/go/nomos/provider/v1"
 )
 
 // T020: Integration test for Health RPC state transitions
@@ -27,7 +27,7 @@ func TestHealthTransitions(t *testing.T) {
 		t.Fatalf("health check failed: %v", err)
 	}
 
-	if resp.Status != pb.HealthStatus_STATUS_DEGRADED {
+	if resp.Status != pb.HealthResponse_STATUS_DEGRADED {
 		t.Errorf("expected STATUS_DEGRADED before init, got %v", resp.Status)
 	}
 
@@ -46,7 +46,7 @@ func TestHealthTransitions(t *testing.T) {
 		t.Fatalf("health check failed: %v", err)
 	}
 
-	if resp.Status != pb.HealthStatus_STATUS_OK {
+	if resp.Status != pb.HealthResponse_STATUS_OK {
 		t.Errorf("expected STATUS_OK after init, got %v", resp.Status)
 	}
 
@@ -61,7 +61,7 @@ func TestHealthTransitions(t *testing.T) {
 		t.Fatalf("health check failed: %v", err)
 	}
 
-	if resp.Status != pb.HealthStatus_STATUS_DEGRADED {
+	if resp.Status != pb.HealthResponse_STATUS_DEGRADED {
 		t.Errorf("expected STATUS_DEGRADED after shutdown, got %v", resp.Status)
 	}
 }
