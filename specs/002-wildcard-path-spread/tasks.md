@@ -222,4 +222,4 @@ go test -race ./tests/integration/ -run TestWildcard   # US1 checkpoint ✅
 | Tasks marked [P] (parallelizable) | 9 |
 | MVP scope | T001–T007 (7 tasks) |
 
-update
+update2
