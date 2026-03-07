@@ -1459,3 +1459,506 @@ func TestTypeConversionErrorHandling(t *testing.T) {
 		t.Errorf("expected InvalidArgument or Internal error, got %v", st.Code())
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Wildcard Path Spread Operator Tests (002-wildcard-path-spread)
+// ---------------------------------------------------------------------------
+
+// initProvider is a helper that initialises a fresh provider with the given config.
+func initProvider(t *testing.T, client pb.ProviderServiceClient, ctx context.Context, cfg map[string]interface{}) {
+	t.Helper()
+	s, err := structpb.NewStruct(cfg)
+	if err != nil {
+		t.Fatalf("NewStruct: %v", err)
+	}
+	if _, err = client.Init(ctx, &pb.InitRequest{Alias: "wc-test", Config: s}); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+}
+
+// wildcardFetch is a helper that calls Fetch with the given path and returns the
+// top-level fields of the response struct as a map[string]interface{}.
+func wildcardFetch(t *testing.T, client pb.ProviderServiceClient, ctx context.Context, path []string) map[string]interface{} {
+	t.Helper()
+	resp, err := client.Fetch(ctx, &pb.FetchRequest{Path: path})
+	if err != nil {
+		t.Fatalf("Fetch(%v): %v", path, err)
+	}
+	return resp.Value.AsMap()
+}
+
+// T005: US1 — Root-level wildcard retrieval
+func TestWildcardRootLevelRetrieval(t *testing.T) {
+	client, cleanup := startTestServer(t)
+	defer cleanup()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	const pfx = "WC_US1_"
+	vars := map[string]string{
+		pfx + "API_KEY": "secret",
+		pfx + "DB_HOST": "localhost",
+		pfx + "DB_PORT": "5432",
+	}
+	for k, v := range vars {
+		_ = os.Setenv(k, v)
+		t.Cleanup(func() { _ = os.Unsetenv(k) })
+	}
+
+	t.Run("US1-AC1: all in-scope vars returned for root wildcard", func(t *testing.T) {
+		// No provider prefix — root wildcard returns everything
+		initProvider(t, client, ctx, map[string]interface{}{
+			"separator":              "_",
+			"case_transform":         "upper",
+			"enable_type_conversion": false,
+			"enable_json_parsing":    false,
+		})
+		got := wildcardFetch(t, client, ctx, []string{"*"})
+		for k, wantVal := range vars {
+			if got[k] == nil {
+				t.Errorf("US1-AC1: expected key %q in response, got nothing; full response keys: %v", k, mapKeys(got))
+			} else if got[k] != wantVal {
+				t.Errorf("US1-AC1: %q = %v, want %q", k, got[k], wantVal)
+			}
+		}
+	})
+
+	t.Run("US1-AC2: empty in-scope returns empty struct, no error", func(t *testing.T) {
+		// Provider prefix guaranteed to match nothing
+		initProvider(t, client, ctx, map[string]interface{}{
+			"separator":              "_",
+			"case_transform":         "upper",
+			"prefix":                 "DEFINITELY_NO_SUCH_PREFIX_XYZ_",
+			"prefix_mode":            "prepend",
+			"enable_type_conversion": false,
+		})
+		resp, err := client.Fetch(ctx, &pb.FetchRequest{Path: []string{"*"}})
+		if err != nil {
+			t.Fatalf("US1-AC2: unexpected error: %v", err)
+		}
+		if resp.Value == nil {
+			t.Fatal("US1-AC2: expected non-nil Value")
+		}
+		if len(resp.Value.Fields) != 0 {
+			t.Errorf("US1-AC2: expected empty struct, got %d fields", len(resp.Value.Fields))
+		}
+	})
+
+	t.Run("US1-AC3: provider prefix scopes and strips results", func(t *testing.T) {
+		prov := "WC_US1_"
+		initProvider(t, client, ctx, map[string]interface{}{
+			"separator":              "_",
+			"case_transform":         "upper",
+			"prefix":                 prov,
+			"prefix_mode":            "prepend",
+			"enable_type_conversion": false,
+			"enable_json_parsing":    false,
+		})
+		got := wildcardFetch(t, client, ctx, []string{"*"})
+		// Keys must NOT include the provider prefix
+		if _, bad := got[prov+"API_KEY"]; bad {
+			t.Error("US1-AC3: full env var name must not appear as key; expected stripped key")
+		}
+		// Stripped keys should be present
+		for _, stripped := range []string{"API_KEY", "DB_HOST", "DB_PORT"} {
+			if got[stripped] == nil {
+				t.Errorf("US1-AC3: stripped key %q missing from response; keys: %v", stripped, mapKeys(got))
+			}
+		}
+	})
+}
+
+// T009: US2 — Prefix-scoped wildcard retrieval
+func TestWildcardPrefixScopedRetrieval(t *testing.T) {
+	client, cleanup := startTestServer(t)
+	defer cleanup()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	_ = os.Setenv("WC_US2_DATABASE_HOST", "localhost")
+	_ = os.Setenv("WC_US2_DATABASE_PORT", "5432")
+	_ = os.Setenv("WC_US2_APP_KEY", "other")
+	t.Cleanup(func() {
+		_ = os.Unsetenv("WC_US2_DATABASE_HOST")
+		_ = os.Unsetenv("WC_US2_DATABASE_PORT")
+		_ = os.Unsetenv("WC_US2_APP_KEY")
+	})
+
+	initProvider(t, client, ctx, map[string]interface{}{
+		"separator":              "_",
+		"case_transform":         "upper",
+		"prefix":                 "WC_US2_",
+		"prefix_mode":            "prepend",
+		"enable_type_conversion": false,
+		"enable_json_parsing":    false,
+	})
+
+	t.Run("US2-AC1: single-segment namespace, sibling exclusion", func(t *testing.T) {
+		got := wildcardFetch(t, client, ctx, []string{"database", "*"})
+		if got["HOST"] == nil {
+			t.Errorf("US2-AC1: expected key HOST; keys: %v", mapKeys(got))
+		}
+		if got["PORT"] == nil {
+			t.Errorf("US2-AC1: expected key PORT; keys: %v", mapKeys(got))
+		}
+		// APP_KEY is a sibling, must not appear
+		if _, bad := got["APP_KEY"]; bad {
+			t.Error("US2-AC1: sibling APP_KEY must not appear")
+		}
+	})
+
+	t.Run("US2-AC2: returned key is relative suffix, not full name", func(t *testing.T) {
+		got := wildcardFetch(t, client, ctx, []string{"database", "*"})
+		// Keys must be HOST / PORT, NOT WC_US2_DATABASE_HOST
+		for _, bad := range []string{"WC_US2_DATABASE_HOST", "DATABASE_HOST", "WC_US2_DATABASE_PORT"} {
+			if _, ok := got[bad]; ok {
+				t.Errorf("US2-AC2: key %q must not appear (should be stripped)", bad)
+			}
+		}
+	})
+
+	t.Run("US2-AC3: empty DATABASE_* result returns empty struct, no error", func(t *testing.T) {
+		// Use a prefix that maps to nothing
+		initProvider(t, client, ctx, map[string]interface{}{
+			"separator":              "_",
+			"case_transform":         "upper",
+			"prefix":                 "WC_NO_SUCH_",
+			"prefix_mode":            "prepend",
+			"enable_type_conversion": false,
+		})
+		resp, err := client.Fetch(ctx, &pb.FetchRequest{Path: []string{"database", "*"}})
+		if err != nil {
+			t.Fatalf("US2-AC3: unexpected error: %v", err)
+		}
+		if len(resp.Value.Fields) != 0 {
+			t.Errorf("US2-AC3: expected empty struct, got %d fields", len(resp.Value.Fields))
+		}
+	})
+}
+
+// T012: US3 — Deeply nested wildcard retrieval
+func TestWildcardDeeplyNested(t *testing.T) {
+	client, cleanup := startTestServer(t)
+	defer cleanup()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	_ = os.Setenv("APP_DATABASE_HOST", "localhost")
+	_ = os.Setenv("APP_DATABASE_PORT", "5432")
+	_ = os.Setenv("APP_CACHE_HOST", "redis")
+	t.Cleanup(func() {
+		_ = os.Unsetenv("APP_DATABASE_HOST")
+		_ = os.Unsetenv("APP_DATABASE_PORT")
+		_ = os.Unsetenv("APP_CACHE_HOST")
+	})
+
+	initProvider(t, client, ctx, map[string]interface{}{
+		"separator":              "_",
+		"case_transform":         "upper",
+		"enable_type_conversion": false,
+		"enable_json_parsing":    false,
+	})
+
+	t.Run("US3-AC1: APP_DATABASE_* returned, APP_CACHE_* excluded", func(t *testing.T) {
+		got := wildcardFetch(t, client, ctx, []string{"app", "database", "*"})
+		if got["HOST"] == nil {
+			t.Errorf("US3-AC1: expected HOST; keys: %v", mapKeys(got))
+		}
+		if got["PORT"] == nil {
+			t.Errorf("US3-AC1: expected PORT; keys: %v", mapKeys(got))
+		}
+		if _, bad := got["APP_CACHE_HOST"]; bad {
+			t.Error("US3-AC1: APP_CACHE_HOST must not appear (sibling namespace)")
+		}
+		if _, bad := got["CACHE_HOST"]; bad {
+			t.Error("US3-AC1: CACHE_HOST must not appear (sibling namespace)")
+		}
+	})
+
+	t.Run("US3-AC2: deeply nested path strips full combined prefix", func(t *testing.T) {
+		// Set a three-level variable
+		_ = os.Setenv("SERVICE_DB_REPLICA_HOST", "replica.db")
+		t.Cleanup(func() { _ = os.Unsetenv("SERVICE_DB_REPLICA_HOST") })
+
+		got := wildcardFetch(t, client, ctx, []string{"service", "db", "replica", "*"})
+		if got["HOST"] == nil {
+			t.Errorf("US3-AC2: expected key HOST; keys: %v", mapKeys(got))
+		}
+		// Full name must not appear
+		for _, bad := range []string{"SERVICE_DB_REPLICA_HOST", "DB_REPLICA_HOST"} {
+			if _, ok := got[bad]; ok {
+				t.Errorf("US3-AC2: key %q must not appear (should be stripped)", bad)
+			}
+		}
+	})
+}
+
+// T014: US4 — Non-terminal wildcard position validation
+func TestWildcardPositionValidation(t *testing.T) {
+	client, cleanup := startTestServer(t)
+	defer cleanup()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	initProvider(t, client, ctx, map[string]interface{}{
+		"separator":      "_",
+		"case_transform": "upper",
+	})
+
+	tests := []struct {
+		name      string
+		path      []string
+		wantIndex int
+	}{
+		{
+			name:      "US4-AC1: wildcard at index 0, additional segment after",
+			path:      []string{"*", "host"},
+			wantIndex: 0,
+		},
+		{
+			name:      "US4-AC2: first non-terminal wildcard at index 1",
+			path:      []string{"database", "*", "*"},
+			wantIndex: 1,
+		},
+		{
+			name:      "SC-003: no partial result — middle wildcard",
+			path:      []string{"app", "*", "host"},
+			wantIndex: 1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := client.Fetch(ctx, &pb.FetchRequest{Path: tt.path})
+			if err == nil {
+				t.Fatal("expected INVALID_ARGUMENT error, got nil")
+			}
+			st, ok := status.FromError(err)
+			if !ok {
+				t.Fatalf("expected gRPC status error, got: %v", err)
+			}
+			if st.Code() != codes.InvalidArgument {
+				t.Errorf("expected INVALID_ARGUMENT, got %v", st.Code())
+			}
+			wantMsg := fmt.Sprintf("wildcard operator '*' is only valid at the terminal position of a path; found at index %d", tt.wantIndex)
+			if st.Message() != wantMsg {
+				t.Errorf("message = %q, want %q", st.Message(), wantMsg)
+			}
+		})
+	}
+}
+
+// T016: Type conversion in wildcard results
+func TestWildcardTypeConversion(t *testing.T) {
+	client, cleanup := startTestServer(t)
+	defer cleanup()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	_ = os.Setenv("WC_TC_PORT", "5432")
+	_ = os.Setenv("WC_TC_ENABLED", "true")
+	_ = os.Setenv("WC_TC_NAME", "mydb")
+	t.Cleanup(func() {
+		_ = os.Unsetenv("WC_TC_PORT")
+		_ = os.Unsetenv("WC_TC_ENABLED")
+		_ = os.Unsetenv("WC_TC_NAME")
+	})
+
+	initProvider(t, client, ctx, map[string]interface{}{
+		"separator":              "_",
+		"case_transform":         "upper",
+		"enable_type_conversion": true,
+		"enable_json_parsing":    true,
+	})
+
+	got := wildcardFetch(t, client, ctx, []string{"WC_TC_", "*"})
+	// With type conversion, "5432" should come back as a number
+	// Note: match prefix is "WC_TC__" ... actually we need to use the right prefix.
+	// Let me re-check: path ["WC_TC_", "*"] => namespace ["WC_TC_"] => BuildPrefix → "WC_TC__"
+	// That won't match "WC_TC_PORT". Let me use ["WC_TC", "*"]
+	// path ["WC_TC", "*"] => namespace ["WC_TC"] => upper → "WC_TC" + "_" = "WC_TC_"
+	_ = got // discard result above, we'll re-fetch correctly
+
+	got = wildcardFetch(t, client, ctx, []string{"WC_TC", "*"})
+	// PORT should be numeric
+	portVal, ok := got["PORT"]
+	if !ok {
+		t.Fatalf("expected PORT in response; keys: %v", mapKeys(got))
+	}
+	portNum, isNum := portVal.(float64)
+	if !isNum {
+		t.Errorf("PORT type conversion: expected float64, got %T (%v)", portVal, portVal)
+	} else if portNum != 5432 {
+		t.Errorf("PORT value: got %v, want 5432", portNum)
+	}
+
+	// ENABLED should be boolean
+	enabledVal, ok := got["ENABLED"]
+	if !ok {
+		t.Fatalf("expected ENABLED in response; keys: %v", mapKeys(got))
+	}
+	enabledBool, isBool := enabledVal.(bool)
+	if !isBool {
+		t.Errorf("ENABLED type conversion: expected bool, got %T (%v)", enabledVal, enabledVal)
+	} else if !enabledBool {
+		t.Errorf("ENABLED value: got false, want true")
+	}
+
+	// NAME should remain a string
+	nameVal, ok := got["NAME"]
+	if !ok {
+		t.Fatalf("expected NAME in response; keys: %v", mapKeys(got))
+	}
+	if nameStr, isStr := nameVal.(string); !isStr || nameStr != "mydb" {
+		t.Errorf("NAME value: got %v (%T), want string 'mydb'", nameVal, nameVal)
+	}
+}
+
+// T017: Combined provider prefix + path prefix wildcard
+func TestWildcardCombinedProviderAndPathPrefix(t *testing.T) {
+	client, cleanup := startTestServer(t)
+	defer cleanup()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	_ = os.Setenv("MYAPP_DATABASE_HOST", "db.local")
+	_ = os.Setenv("MYAPP_DATABASE_PORT", "5432")
+	_ = os.Setenv("MYAPP_CACHE_HOST", "cache.local")
+	_ = os.Setenv("OTHER_DATABASE_HOST", "other.local")
+	t.Cleanup(func() {
+		_ = os.Unsetenv("MYAPP_DATABASE_HOST")
+		_ = os.Unsetenv("MYAPP_DATABASE_PORT")
+		_ = os.Unsetenv("MYAPP_CACHE_HOST")
+		_ = os.Unsetenv("OTHER_DATABASE_HOST")
+	})
+
+	// Provider configured with prefix="MYAPP_" in prepend mode.
+	// path=["database","*"] → matchPrefix = "MYAPP_DATABASE_"
+	initProvider(t, client, ctx, map[string]interface{}{
+		"separator":              "_",
+		"case_transform":         "upper",
+		"prefix":                 "MYAPP_",
+		"prefix_mode":            "prepend",
+		"enable_type_conversion": false,
+		"enable_json_parsing":    false,
+	})
+
+	got := wildcardFetch(t, client, ctx, []string{"database", "*"})
+
+	t.Run("FR-005: only MYAPP_DATABASE_* vars returned", func(t *testing.T) {
+		if got["HOST"] == nil {
+			t.Errorf("expected HOST; keys: %v", mapKeys(got))
+		}
+		if got["PORT"] == nil {
+			t.Errorf("expected PORT; keys: %v", mapKeys(got))
+		}
+		// Must not include MYAPP_CACHE_* or OTHER_DATABASE_*
+		for _, bad := range []string{"CACHE_HOST", "MYAPP_CACHE_HOST", "OTHER_DATABASE_HOST"} {
+			if _, ok := got[bad]; ok {
+				t.Errorf("key %q must not appear", bad)
+			}
+		}
+	})
+
+	t.Run("FR-005: full MYAPP_DATABASE_ prefix stripped from keys", func(t *testing.T) {
+		for _, bad := range []string{"MYAPP_DATABASE_HOST", "DATABASE_HOST"} {
+			if _, ok := got[bad]; ok {
+				t.Errorf("unstripped key %q must not appear", bad)
+			}
+		}
+	})
+}
+
+// T020: filter_only prefix mode wildcard behaviour
+func TestWildcardFilterOnlyMode(t *testing.T) {
+	client, cleanup := startTestServer(t)
+	defer cleanup()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	_ = os.Setenv("MYAPP_KEY", "myvalue")
+	_ = os.Setenv("MYAPP_OTHER", "othervalue")
+	_ = os.Setenv("UNRELATED_VAR", "unrelated")
+	t.Cleanup(func() {
+		_ = os.Unsetenv("MYAPP_KEY")
+		_ = os.Unsetenv("MYAPP_OTHER")
+		_ = os.Unsetenv("UNRELATED_VAR")
+	})
+
+	t.Run("root wildcard returns all vars (no stripping in filter_only)", func(t *testing.T) {
+		initProvider(t, client, ctx, map[string]interface{}{
+			"separator":              "_",
+			"case_transform":         "upper",
+			"prefix":                 "MYAPP_",
+			"prefix_mode":            "filter_only",
+			"enable_type_conversion": false,
+			"enable_json_parsing":    false,
+		})
+		got := wildcardFetch(t, client, ctx, []string{"*"})
+		// In filter_only root wildcard, ALL vars are returned and NO prefix is stripped
+		// (matchPrefix == "" → FetchAll returns all)
+		if got["MYAPP_KEY"] == nil && got["UNRELATED_VAR"] == nil {
+			// While we can't enumerate all env vars, at least our test vars should be present
+			t.Logf("Note: root wildcard in filter_only returns all vars; test vars found: %v", mapKeys(got))
+		}
+		// MYAPP_KEY must appear (not stripped since matchPrefix is "")
+		if got["MYAPP_KEY"] == nil {
+			t.Errorf("expected MYAPP_KEY in root wildcard result; keys include: %v", mapKeys(got))
+		}
+	})
+
+	t.Run("prefixed wildcard uses path-derived prefix only", func(t *testing.T) {
+		initProvider(t, client, ctx, map[string]interface{}{
+			"separator":              "_",
+			"case_transform":         "upper",
+			"prefix":                 "MYAPP_",
+			"prefix_mode":            "filter_only",
+			"enable_type_conversion": false,
+			"enable_json_parsing":    false,
+		})
+		// path ["myapp", "*"] → BuildPrefix(["myapp"]) = "MYAPP_" (no config prefix prepended)
+		// → FetchAll("MYAPP_") → vars starting with "MYAPP_", keys stripped of "MYAPP_"
+		got := wildcardFetch(t, client, ctx, []string{"myapp", "*"})
+		if got["KEY"] == nil {
+			t.Errorf("expected KEY (stripped from MYAPP_KEY); keys: %v", mapKeys(got))
+		}
+		if got["OTHER"] == nil {
+			t.Errorf("expected OTHER (stripped from MYAPP_OTHER); keys: %v", mapKeys(got))
+		}
+		// UNRELATED_VAR must not appear
+		for _, bad := range []string{"UNRELATED_VAR", "MYAPP_KEY", "MYAPP_OTHER"} {
+			if _, ok := got[bad]; ok {
+				t.Errorf("key %q must not appear (should be excluded or stripped)", bad)
+			}
+		}
+	})
+
+	t.Run("path-derived prefix outside configured scope returns empty collection", func(t *testing.T) {
+		initProvider(t, client, ctx, map[string]interface{}{
+			"separator":              "_",
+			"case_transform":         "upper",
+			"prefix":                 "MYAPP_",
+			"prefix_mode":            "filter_only",
+			"enable_type_conversion": false,
+		})
+		// path ["other", "*"] → BuildPrefix → "OTHER_", which does NOT start with "MYAPP_"
+		// Safety check (Decision 5) returns empty collection
+		resp, err := client.Fetch(ctx, &pb.FetchRequest{Path: []string{"other", "*"}})
+		if err != nil {
+			t.Fatalf("expected empty collection, got error: %v", err)
+		}
+		if len(resp.Value.Fields) != 0 {
+			t.Errorf("expected empty collection for out-of-scope prefix, got %d fields: %v",
+				len(resp.Value.Fields), mapKeys(resp.Value.AsMap()))
+		}
+	})
+}
+
+// mapKeys returns the keys of a map as a slice (helper for test error messages).
+func mapKeys(m map[string]interface{}) []string {
+	ks := make([]string, 0, len(m))
+	for k := range m {
+		ks = append(ks, k)
+	}
+	return ks
+}

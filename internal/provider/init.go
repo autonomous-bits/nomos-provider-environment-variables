@@ -59,7 +59,7 @@ func (p *Provider) Init(_ context.Context, req *pb.InitRequest) (*pb.InitRespons
 
 	// Create fetcher if not exists
 	if p.fetcher == nil {
-		p.fetcher = fetcher.New()
+		p.fetcher = fetcher.NewWithLogger(p.logger)
 	}
 
 	// Create resolver with configured separator, case transformation, prefix, and prefix mode

@@ -558,3 +558,168 @@ func TestPrefixWithAllTransformationStrategies(t *testing.T) {
 		})
 	}
 }
+
+// T004/T008/T011: Unit tests for BuildPrefix — root, single-segment, and multi-segment namespace paths.
+func TestBuildPrefix(t *testing.T) {
+	tests := []struct {
+		name          string
+		namespacePath []string
+		separator     string
+		transform     string
+		prefix        string
+		prefixMode    string
+		want          string
+		wantErr       bool
+	}{
+		// --- T004: Root wildcard (empty namespacePath) ---
+		{
+			name:          "root: no prefix → empty",
+			namespacePath: []string{},
+			separator:     "_",
+			transform:     "upper",
+			prefix:        "",
+			prefixMode:    "prepend",
+			want:          "",
+		},
+		{
+			name:          "root: prepend mode with prefix",
+			namespacePath: []string{},
+			separator:     "_",
+			transform:     "upper",
+			prefix:        "MYAPP_",
+			prefixMode:    "prepend",
+			want:          "MYAPP_",
+		},
+		{
+			name:          "root: filter_only mode with prefix → empty (no prepend)",
+			namespacePath: []string{},
+			separator:     "_",
+			transform:     "upper",
+			prefix:        "MYAPP_",
+			prefixMode:    "filter_only",
+			want:          "",
+		},
+
+		// --- T008: Single-segment namespace ---
+		{
+			name:          "single segment: upper + underscore, no prefix",
+			namespacePath: []string{"database"},
+			separator:     "_",
+			transform:     "upper",
+			prefix:        "",
+			prefixMode:    "prepend",
+			want:          "DATABASE_",
+		},
+		{
+			name:          "single segment: upper + underscore, prepend prefix",
+			namespacePath: []string{"database"},
+			separator:     "_",
+			transform:     "upper",
+			prefix:        "MYAPP_",
+			prefixMode:    "prepend",
+			want:          "MYAPP_DATABASE_",
+		},
+		{
+			name:          "single segment: lower + dash, no prefix",
+			namespacePath: []string{"database"},
+			separator:     "-",
+			transform:     "lower",
+			prefix:        "",
+			prefixMode:    "prepend",
+			want:          "database-",
+		},
+		{
+			name:          "single segment: filter_only mode, prefix not prepended",
+			namespacePath: []string{"database"},
+			separator:     "_",
+			transform:     "upper",
+			prefix:        "MYAPP_",
+			prefixMode:    "filter_only",
+			want:          "DATABASE_",
+		},
+		{
+			name:          "single segment: empty segment → ErrEmptySegment",
+			namespacePath: []string{""},
+			separator:     "_",
+			transform:     "upper",
+			prefix:        "",
+			prefixMode:    "prepend",
+			wantErr:       true,
+		},
+
+		// --- T011: Multi-segment namespace ---
+		{
+			name:          "two segments: upper + underscore",
+			namespacePath: []string{"app", "database"},
+			separator:     "_",
+			transform:     "upper",
+			prefix:        "",
+			prefixMode:    "prepend",
+			want:          "APP_DATABASE_",
+		},
+		{
+			name:          "three segments: upper + underscore",
+			namespacePath: []string{"service", "db", "replica"},
+			separator:     "_",
+			transform:     "upper",
+			prefix:        "",
+			prefixMode:    "prepend",
+			want:          "SERVICE_DB_REPLICA_",
+		},
+		{
+			name:          "two segments: with provider prefix (prepend)",
+			namespacePath: []string{"app", "database"},
+			separator:     "_",
+			transform:     "upper",
+			prefix:        "MYAPP_",
+			prefixMode:    "prepend",
+			want:          "MYAPP_APP_DATABASE_",
+		},
+		{
+			name:          "two segments: with provider prefix (filter_only, not prepended)",
+			namespacePath: []string{"app", "database"},
+			separator:     "_",
+			transform:     "upper",
+			prefix:        "MYAPP_",
+			prefixMode:    "filter_only",
+			want:          "APP_DATABASE_",
+		},
+		{
+			name:          "two segments: lower + dash",
+			namespacePath: []string{"App", "Config"},
+			separator:     "-",
+			transform:     "lower",
+			prefix:        "",
+			prefixMode:    "prepend",
+			want:          "app-config-",
+		},
+		{
+			name:          "multi-segment: empty segment returns error",
+			namespacePath: []string{"app", "", "config"},
+			separator:     "_",
+			transform:     "upper",
+			prefix:        "",
+			prefixMode:    "prepend",
+			wantErr:       true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := resolver.NewResolver(tt.separator, tt.transform, tt.prefix, tt.prefixMode)
+			got, err := r.BuildPrefix(tt.namespacePath)
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("BuildPrefix() expected error, got nil (result %q)", got)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("BuildPrefix() unexpected error: %v", err)
+			}
+			if got != tt.want {
+				t.Errorf("BuildPrefix() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
