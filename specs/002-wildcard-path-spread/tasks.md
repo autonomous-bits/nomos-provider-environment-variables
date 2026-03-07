@@ -221,3 +221,5 @@ go test -race ./tests/integration/ -run TestWildcard   # US1 checkpoint ✅
 | Polish tasks | 6 (T016, T017, T018, T019, T020, T021) |
 | Tasks marked [P] (parallelizable) | 9 |
 | MVP scope | T001–T007 (7 tasks) |
+
+update
