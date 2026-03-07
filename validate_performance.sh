@@ -51,4 +51,17 @@ echo "  - Measure time to receive InvalidArgument error"
 echo "Status: Ready for integration test"
 echo
 
+# T021: SC-002 - Wildcard performance vs cumulative individual lookups
+echo "=== T021: SC-002 - Wildcard Performance Validation ==="
+echo "Running BenchmarkWildcardVsIndividual (20 vars, 10 iterations)..."
+BENCH_OUTPUT=$(go test -tags=integration -bench=BenchmarkWildcardVsIndividual -benchtime=10x ./tests/integration/ 2>&1)
+echo "$BENCH_OUTPUT"
+if echo "$BENCH_OUTPUT" | grep -q "SC-002 FAILED"; then
+    echo "  ✗ SC-002 FAIL: wildcard performance exceeded tolerance"
+    exit 1
+else
+    echo "  ✓ SC-002 PASS: wildcard performance is within acceptable bounds"
+fi
+echo
+
 echo "=== Performance Validation Complete ==="

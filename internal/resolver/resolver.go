@@ -70,3 +70,40 @@ func (r *Resolver) Transform(path []string) (string, error) {
 
 	return varName, nil
 }
+
+// BuildPrefix computes the environment variable prefix used for wildcard matching.
+// namespacePath contains all path segments preceding the terminal "*".
+//
+// Root wildcard (empty namespacePath):
+//   - Returns r.prefix when prefixMode == "prepend" and prefix is non-empty.
+//   - Otherwise returns "".
+//
+// Non-root wildcard (non-empty namespacePath):
+//   - Validates that no segment is empty.
+//   - Applies case transformation to each segment.
+//   - Joins segments with the configured separator and appends a trailing separator
+//     to enforce full-segment boundary matching.
+//   - Prepends r.prefix when prefixMode == "prepend" and prefix is non-empty.
+func (r *Resolver) BuildPrefix(namespacePath []string) (string, error) {
+	if len(namespacePath) == 0 {
+		if r.prefixMode == "prepend" && r.prefix != "" {
+			return r.prefix, nil
+		}
+		return "", nil
+	}
+
+	for _, seg := range namespacePath {
+		if strings.TrimSpace(seg) == "" {
+			return "", ErrEmptySegment
+		}
+	}
+
+	transformed := TransformSegments(namespacePath, r.caseTransform)
+	joined := strings.Join(transformed, r.separator)
+	base := joined + r.separator
+
+	if r.prefixMode == "prepend" && r.prefix != "" {
+		return r.prefix + base, nil
+	}
+	return base, nil
+}

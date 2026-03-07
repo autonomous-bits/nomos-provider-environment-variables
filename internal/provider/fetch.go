@@ -35,6 +35,20 @@ func (p *Provider) Fetch(_ context.Context, req *pb.FetchRequest) (*pb.FetchResp
 		}
 	}
 
+	// Validate wildcard position: "*" must only appear at the terminal position.
+	for i, seg := range req.Path {
+		if seg == "*" && i != len(req.Path)-1 {
+			p.logger.Warn("non-terminal wildcard operator at path index %d", i)
+			return nil, status.Errorf(codes.InvalidArgument,
+				"wildcard operator '*' is only valid at the terminal position of a path; found at index %d", i)
+		}
+	}
+
+	// Dispatch wildcard requests
+	if req.Path[len(req.Path)-1] == "*" {
+		return p.fetchWildcard(req.Path[:len(req.Path)-1])
+	}
+
 	// Determine the variable name to fetch
 	var varName string
 	var err error
@@ -110,4 +124,64 @@ func (p *Provider) Fetch(_ context.Context, req *pb.FetchRequest) (*pb.FetchResp
 	return &pb.FetchResponse{
 		Value: valueStruct,
 	}, nil
+}
+
+// fetchWildcard handles Fetch requests where the terminal path segment is "*".
+// namespacePath contains all segments before the "*".
+// It computes the match prefix via BuildPrefix, enumerates matching env vars,
+// applies type conversion to each value, and returns a FetchResponse whose
+// Value struct contains one field per matched variable (key = stripped suffix).
+func (p *Provider) fetchWildcard(namespacePath []string) (*pb.FetchResponse, error) {
+	matchPrefix, err := p.resolver.BuildPrefix(namespacePath)
+	if err != nil {
+		p.logger.Error("BuildPrefix failed for wildcard path %v: %v", namespacePath, err)
+		return nil, status.Errorf(codes.InvalidArgument, "path transformation failed: %v", err)
+	}
+	p.logger.Debug("wildcard match prefix: %q", matchPrefix)
+
+	// Safety check for filter_only mode: path-derived prefix must start with the
+	// configured provider prefix. If not, the request is outside the configured
+	// scope and an empty collection is returned (Decision 5).
+	if p.config.PrefixMode == "filter_only" && p.config.Prefix != "" && len(namespacePath) > 0 {
+		if !strings.HasPrefix(matchPrefix, p.config.Prefix) {
+			p.logger.Warn("wildcard prefix %q is outside configured scope %q; returning empty collection",
+				matchPrefix, p.config.Prefix)
+			emptyStruct, _ := structpb.NewStruct(map[string]interface{}{})
+			return &pb.FetchResponse{Value: emptyStruct}, nil
+		}
+	}
+
+	envVars, err := p.fetcher.FetchAll(matchPrefix)
+	if err != nil {
+		p.logger.Error("FetchAll failed for wildcard prefix %q: %v", matchPrefix, err)
+		return nil, status.Errorf(codes.Internal, "fetch failed: %v", err)
+	}
+	p.logger.Debug("wildcard result count: %d entries for prefix %q", len(envVars), matchPrefix)
+
+	fields := make(map[string]interface{}, len(envVars))
+	for key, value := range envVars {
+		var convertedValue interface{} = value
+		if p.config.EnableTypeConversion || p.config.EnableJSONParsing {
+			converted, convErr := p.convertValue(value)
+			if convErr != nil {
+				p.logger.Error("type conversion failed for wildcard key %s: %v", key, convErr)
+				return nil, status.Errorf(codes.InvalidArgument, "type conversion failed: %v", convErr)
+			}
+			convertedValue = converted
+		}
+		protoVal, protoErr := toProtoValue(convertedValue)
+		if protoErr != nil {
+			p.logger.Error("failed to convert value to protobuf for wildcard key %s: %v", key, protoErr)
+			return nil, status.Errorf(codes.Internal, "value conversion failed: %v", protoErr)
+		}
+		fields[key] = protoVal
+	}
+
+	valueStruct, err := structpb.NewStruct(fields)
+	if err != nil {
+		p.logger.Error("failed to create protobuf struct for wildcard response: %v", err)
+		return nil, status.Errorf(codes.Internal, "struct creation failed: %v", err)
+	}
+
+	return &pb.FetchResponse{Value: valueStruct}, nil
 }
