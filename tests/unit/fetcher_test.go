@@ -512,3 +512,131 @@ func TestPlatformNativeCaseSensitivity(t *testing.T) {
 		}
 	}
 }
+
+// T002: Unit tests for FetchAll — enumerate environment variables with optional prefix filtering.
+func TestFetchAll(t *testing.T) {
+	// Use a unique prefix to isolate our test variables from the rest of the environment.
+	const pfx = "FETCHALL_TEST_"
+
+	setup := map[string]string{
+		pfx + "HOST": "localhost",
+		pfx + "PORT": "5432",
+		pfx + "URL":  "postgres://localhost",
+		"OTHER_VAR":  "should_not_appear",
+	}
+	for k, v := range setup {
+		if err := os.Setenv(k, v); err != nil {
+			t.Fatalf("setup: os.Setenv(%q): %v", k, err)
+		}
+		t.Cleanup(func() { _ = os.Unsetenv(k) })
+	}
+
+	t.Run("empty matchPrefix returns all env vars including test vars", func(t *testing.T) {
+		f := fetcher.New()
+		got, err := f.FetchAll("")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		// verify all test vars are present (there may be many more from the OS)
+		for k, wantVal := range setup {
+			if got[k] != wantVal {
+				t.Errorf("FetchAll(\"\")[%q] = %q, want %q", k, got[k], wantVal)
+			}
+		}
+	})
+
+	t.Run("matchPrefix filters keys and strips prefix", func(t *testing.T) {
+		f := fetcher.New()
+		got, err := f.FetchAll(pfx)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		// Only FETCHALL_TEST_* vars should appear, with prefix stripped
+		want := map[string]string{
+			"HOST": "localhost",
+			"PORT": "5432",
+			"URL":  "postgres://localhost",
+		}
+		if len(got) != len(want) {
+			t.Errorf("FetchAll(%q) returned %d entries, want %d; got keys: %v", pfx, len(got), len(want), keys(got))
+		}
+		for k, wantVal := range want {
+			if got[k] != wantVal {
+				t.Errorf("FetchAll(%q)[%q] = %q, want %q", pfx, k, got[k], wantVal)
+			}
+		}
+		// OTHER_VAR must not appear
+		if _, ok := got["OTHER_VAR"]; ok {
+			t.Error("OTHER_VAR must not appear in prefix-filtered result")
+		}
+	})
+
+	t.Run("no match returns empty map", func(t *testing.T) {
+		f := fetcher.New()
+		got, err := f.FetchAll("ZZZNOMATCH_XYZZY_")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(got) != 0 {
+			t.Errorf("expected empty map, got %d entries: %v", len(got), got)
+		}
+	})
+
+	t.Run("key exactly equal to matchPrefix produces empty relKey and is skipped", func(t *testing.T) {
+		// Set a key that IS exactly the prefix (no trailing content)
+		exactKey := "FETCHALL_EXACT_"
+		if err := os.Setenv(exactKey, "value"); err != nil {
+			t.Fatalf("Setenv: %v", err)
+		}
+		t.Cleanup(func() { _ = os.Unsetenv(exactKey) })
+
+		f := fetcher.New()
+		got, err := f.FetchAll(exactKey)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if _, ok := got[""]; ok {
+			t.Error("empty-string key must not appear in result")
+		}
+		if len(got) != 0 {
+			t.Errorf("expected empty map, got: %v", got)
+		}
+	})
+
+	t.Run("MaxValueSize violation: entry is skipped", func(t *testing.T) {
+		const overKey = "FETCHALL_OVERSIZED_KEY"
+		overValue := string(make([]byte, fetcher.MaxValueSize+1))
+		if err := os.Setenv(overKey, overValue); err != nil {
+			t.Skipf("OS rejected large env var (limit may be below MaxValueSize): %v", err)
+		}
+		t.Cleanup(func() { _ = os.Unsetenv(overKey) })
+
+		// Also set a normal sibling key
+		const sibling = "FETCHALL_OVERSIZED_OK"
+		if err := os.Setenv(sibling, "fine"); err != nil {
+			t.Fatalf("Setenv sibling: %v", err)
+		}
+		t.Cleanup(func() { _ = os.Unsetenv(sibling) })
+
+		f := fetcher.New()
+		got, err := f.FetchAll("FETCHALL_OVERSIZED_")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if _, ok := got["KEY"]; ok {
+			t.Error("oversized entry must be skipped")
+		}
+		if got["OK"] != "fine" {
+			t.Errorf("normal sibling should be present, got %q", got["OK"])
+		}
+	})
+}
+
+// keys returns the keys of a map as a slice (helper for test error messages).
+func keys(m map[string]string) []string {
+	ks := make([]string, 0, len(m))
+	for k := range m {
+		ks = append(ks, k)
+	}
+	return ks
+}

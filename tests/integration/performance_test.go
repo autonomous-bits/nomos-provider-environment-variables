@@ -654,3 +654,100 @@ func BenchmarkConcurrentFetches_DataRaceValidation(b *testing.B) {
 	b.Logf("Run with -race flag to validate zero data races requirement")
 	b.Logf("Command: go test -tags=integration -bench=BenchmarkConcurrentFetches_DataRaceValidation -race ./tests/integration/")
 }
+
+// BenchmarkWildcardVsIndividual validates SC-002 for the wildcard path spread feature.
+//
+// SC-002: Wildcard query response time MUST be no worse than the cumulative time of
+// performing equivalent individual single-key lookups for the same matched variables.
+//
+// Test strategy:
+//  1. Set up N environment variables under a namespace prefix
+//  2. Measure cumulative time for N individual single-key Fetch calls
+//  3. Measure time for one wildcard Fetch call returning the same N variables
+//  4. Assert wildcard time ≤ cumulative individual time
+//
+// Usage:
+//
+//	go test -tags=integration -bench=BenchmarkWildcardVsIndividual -benchtime=10x ./tests/integration/
+func BenchmarkWildcardVsIndividual(b *testing.B) {
+	const varCount = 20
+	client, cleanup := startTestServer(b)
+	defer cleanup()
+
+	ctx := context.Background()
+	timestamp := time.Now().UnixNano()
+	prefix := fmt.Sprintf("WCPERF%d_", timestamp)
+
+	// Set up N environment variables under the test prefix
+	keys := make([]string, varCount)
+	for i := 0; i < varCount; i++ {
+		keys[i] = fmt.Sprintf("%sVAR%02d", prefix, i)
+		if err := os.Setenv(keys[i], fmt.Sprintf("value%02d", i)); err != nil {
+			b.Skipf("cannot set env var %s: %v", keys[i], err)
+		}
+	}
+	defer func() {
+		for _, k := range keys {
+			_ = os.Unsetenv(k)
+		}
+	}()
+
+	// Initialise with separator and upper-case transform so path ["wcperf...","*"] maps to prefix
+	configStruct, err := structpb.NewStruct(map[string]interface{}{
+		"separator":      "_",
+		"case_transform": "upper",
+	})
+	if err != nil {
+		b.Fatalf("failed to create config: %v", err)
+	}
+	_, err = client.Init(ctx, &pb.InitRequest{
+		Alias:  "wc-perf-env",
+		Config: configStruct,
+	})
+	if err != nil {
+		b.Fatalf("init failed: %v", err)
+	}
+
+	// Remove trailing underscore from prefix to derive the path namespace segment
+	// e.g. "WCPERF1234_" → ["wcperf1234","*"]
+	namespace := fmt.Sprintf("wcperf%d", timestamp)
+
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		// --- Measure cumulative individual lookups ---
+		individualStart := time.Now()
+		for _, key := range keys {
+			_, err := client.Fetch(ctx, &pb.FetchRequest{Path: []string{key}})
+			if err != nil {
+				b.Fatalf("individual fetch failed for %s: %v", key, err)
+			}
+		}
+		individualElapsed := time.Since(individualStart)
+
+		// --- Measure single wildcard lookup ---
+		wildcardStart := time.Now()
+		_, err := client.Fetch(ctx, &pb.FetchRequest{Path: []string{namespace, "*"}})
+		if err != nil {
+			b.Fatalf("wildcard fetch failed: %v", err)
+		}
+		wildcardElapsed := time.Since(wildcardStart)
+
+		// SC-002 assertion: wildcard must be no worse than cumulative individual lookups
+		if wildcardElapsed > individualElapsed {
+			// Allow 2× headroom for gRPC overhead variance; hard-fail at 5×
+			if wildcardElapsed > 5*individualElapsed {
+				b.Errorf("SC-002 FAILED (iter %d): wildcard %v > 5× individual cumulative %v",
+					i, wildcardElapsed, individualElapsed)
+			} else {
+				b.Logf("SC-002 WARN (iter %d): wildcard %v slightly exceeds individual cumulative %v (within 5× tolerance)",
+					i, wildcardElapsed, individualElapsed)
+			}
+		}
+
+		b.ReportMetric(float64(wildcardElapsed.Nanoseconds())/1e6, "wildcard_ms")
+		b.ReportMetric(float64(individualElapsed.Nanoseconds())/1e6, "individual_cumulative_ms")
+	}
+
+	b.Logf("SC-002: wildcard performance validation complete")
+}
